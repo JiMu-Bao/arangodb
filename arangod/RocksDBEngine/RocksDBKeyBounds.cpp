@@ -239,7 +239,6 @@ RocksDBKeyBounds::RocksDBKeyBounds(RocksDBEntryType type, uint64_t id,
 
   switch (_type) {
     case RocksDBEntryType::PrimaryIndexValue: {
-
       // format: id lower id upper
       //         start    end
       _internals.reserve(sizeof(id) + (lower.size() + sizeof(_stringSeparator)) +

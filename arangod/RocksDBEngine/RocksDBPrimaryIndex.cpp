@@ -529,7 +529,7 @@ bool RocksDBPrimaryIndex::supportsFilterCondition(
                                                  values, nonNullAttributes,
                                                  /*skip evaluation (during execution)*/ false);
 
-  //for (auto const& int_ast_vec_pair : found) {
+  // for (auto const& int_ast_vec_pair : found) {
   //  std::stringstream ss;
   //  ss << "-==- " << int_ast_vec_pair.first;
   //  for (auto const& node : int_ast_vec_pair.second) {
@@ -540,7 +540,7 @@ bool RocksDBPrimaryIndex::supportsFilterCondition(
 
   estimatedItems = values;  // TODO - check if this ok -- if no reviewer can tell from memory
 
-  //LOG_DEVEL << "supportsFilterCondition (result): " << std::boolalpha << !found.empty();
+  // LOG_DEVEL << "supportsFilterCondition (result): " << std::boolalpha << !found.empty();
   return !found.empty();
 }
 
@@ -553,8 +553,8 @@ IndexIterator* RocksDBPrimaryIndex::iteratorForCondition(
   TRI_ASSERT(node->numMembers() >= 1);
   TRI_ASSERT(node->numMembers() <= 2);
 
-  //LOG_DEVEL << "iteratorForCondition";
-  //LOG_DEVEL << arangodb::aql::AstNode::toString(node);
+  // LOG_DEVEL << "iteratorForCondition";
+  // LOG_DEVEL << arangodb::aql::AstNode::toString(node);
 
   static std::string const& lowest(StaticStrings::Empty);
   static std::string const hightest = "\xFF";
@@ -595,7 +595,6 @@ IndexIterator* RocksDBPrimaryIndex::iteratorForCondition(
       }
     }
   }
-
 
   std::unique_ptr<std::string> lower = nullptr;
   std::unique_ptr<std::string> upper = nullptr;
@@ -639,7 +638,6 @@ IndexIterator* RocksDBPrimaryIndex::iteratorForCondition(
     TRI_ASSERT(valNode->type == aql::AstNodeType::NODE_TYPE_VALUE);
 
     if (valNode->isStringValue()) {
-
       if (flip) {
         switch (type) {
           case aql::NODE_TYPE_OPERATOR_BINARY_LE: {
@@ -660,7 +658,8 @@ IndexIterator* RocksDBPrimaryIndex::iteratorForCondition(
           }
           default: {
             LOG_DEVEL << "cound not specialize condition";
-            LOG_DEVEL << "EmptyIndexIterator - complex" << arangodb::aql::AstNode::toString(node);
+            LOG_DEVEL << "EmptyIndexIterator - complex"
+                      << arangodb::aql::AstNode::toString(node);
             return new EmptyIndexIterator(&_collection, trx);
           }
         }
@@ -679,8 +678,7 @@ IndexIterator* RocksDBPrimaryIndex::iteratorForCondition(
         }
       }
 
-      if (type == aql::NODE_TYPE_OPERATOR_BINARY_GE ||
-          type == aql::NODE_TYPE_OPERATOR_BINARY_GT) {
+      if (type == aql::NODE_TYPE_OPERATOR_BINARY_GE || type == aql::NODE_TYPE_OPERATOR_BINARY_GT) {
         // a.b >= value
         if (type == aql::NODE_TYPE_OPERATOR_BINARY_GE && value != lowest) {
           value.back() -= 0x01U;  // modify lower bound so it is included
