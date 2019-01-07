@@ -144,38 +144,6 @@ bool RocksDBPrimaryIndexRangeIterator::next(LocalDocumentIdCallback const& cb, s
   return true;
 }
 
-// bool RocksDBPrimaryIndexRangeIterator::nextCovering(DocumentCallback const& cb, size_t limit) {
-//  TRI_ASSERT(_trx->state()->isRunning());
-//
-//  if (limit == 0 || !_iterator->Valid() || outOfRange()) {
-//    // No limit no data, or we are actually done. The last call should have
-//    // returned false
-//    TRI_ASSERT(limit > 0);  // Someone called with limit == 0. Api broken
-//    return false;
-//  }
-//
-//  while (limit > 0) {
-//    TRI_ASSERT(_index->objectId() == RocksDBKey::objectId(_iterator->key()));
-//
-//    LocalDocumentId const documentId(
-//         RocksDBValue::documentId(_iterator->value()));
-//    cb(documentId, RocksDBKey::indexedVPack(_iterator->key()));
-//
-//    --limit;
-//    if (_reverse) {
-//      _iterator->Prev();
-//    } else {
-//      _iterator->Next();
-//    }
-//
-//    if (!_iterator->Valid() || outOfRange()) {
-//      return false;
-//    }
-//  }
-//
-//  return true;
-//}
-
 void RocksDBPrimaryIndexRangeIterator::skip(uint64_t count, uint64_t& skipped) {
   TRI_ASSERT(_trx->state()->isRunning());
 
@@ -561,18 +529,18 @@ bool RocksDBPrimaryIndex::supportsFilterCondition(
                                                  values, nonNullAttributes,
                                                  /*skip evaluation (during execution)*/ false);
 
-  for (auto const& int_ast_vec_pair : found) {
-    std::stringstream ss;
-    ss << "-==- " << int_ast_vec_pair.first;
-    for (auto const& node : int_ast_vec_pair.second) {
-      ss << " <<==>> " << arangodb::aql::AstNode::toString(node);
-    }
-    LOG_DEVEL << ss.rdbuf();
-  }
+  //for (auto const& int_ast_vec_pair : found) {
+  //  std::stringstream ss;
+  //  ss << "-==- " << int_ast_vec_pair.first;
+  //  for (auto const& node : int_ast_vec_pair.second) {
+  //    ss << " <<==>> " << arangodb::aql::AstNode::toString(node);
+  //  }
+  //  LOG_DEVEL << ss.rdbuf();
+  //}
 
   estimatedItems = values;  // TODO - check if this ok -- if no reviewer can tell from memory
 
-  LOG_DEVEL << "supportsFilterCondition (result): " << std::boolalpha << !found.empty();
+  //LOG_DEVEL << "supportsFilterCondition (result): " << std::boolalpha << !found.empty();
   return !found.empty();
 }
 
@@ -585,8 +553,8 @@ IndexIterator* RocksDBPrimaryIndex::iteratorForCondition(
   TRI_ASSERT(node->numMembers() >= 1);
   TRI_ASSERT(node->numMembers() <= 2);
 
-  LOG_DEVEL << "iteratorForCondition";
-  LOG_DEVEL << arangodb::aql::AstNode::toString(node);
+  //LOG_DEVEL << "iteratorForCondition";
+  //LOG_DEVEL << arangodb::aql::AstNode::toString(node);
 
   static std::string const& lowest(StaticStrings::Empty);
   static std::string const hightest = "\xFF";
@@ -613,7 +581,6 @@ IndexIterator* RocksDBPrimaryIndex::iteratorForCondition(
     }
 
     TRI_ASSERT(attrNode->type == aql::NODE_TYPE_ATTRIBUTE_ACCESS);
-    bool const isId = (attrNode->stringEquals(StaticStrings::IdString));
 
     if (comp->type == aql::NODE_TYPE_OPERATOR_BINARY_EQ) {
       // a.b == value
@@ -627,67 +594,120 @@ IndexIterator* RocksDBPrimaryIndex::iteratorForCondition(
         return createInIterator(trx, attrNode, valNode);
       }
     }
-
-    auto value = valNode->getString();
-    removeCollectionFromString(isId, value);
-
-    if (comp->type == aql::NODE_TYPE_OPERATOR_BINARY_LT) {
-      // a.b < value
-      if (value != lowest) {
-        value.back() -= 0x01U;  // modify upper bound so that it is not included
-      }
-
-      return new RocksDBPrimaryIndexRangeIterator(
-          &_collection /*logical collection*/, trx, this, opts.ascending /*reverse*/,
-          RocksDBKeyBounds::PrimaryIndex(_objectId, lowest, value));
-    }
-
-    if (comp->type == aql::NODE_TYPE_OPERATOR_BINARY_LE) {
-      // a.b <= value
-      return new RocksDBPrimaryIndexRangeIterator(
-          &_collection /*logical collection*/, trx, this, opts.ascending /*reverse*/,
-          RocksDBKeyBounds::PrimaryIndex(_objectId, lowest, value));
-    }
-
-    if (comp->type == aql::NODE_TYPE_OPERATOR_BINARY_GT) {
-      // a.b > value
-      return new RocksDBPrimaryIndexRangeIterator(
-          &_collection /*logical collection*/, trx, this, opts.ascending /*reverse*/,
-          RocksDBKeyBounds::PrimaryIndex(_objectId, value, hightest));
-    }
-
-    if (comp->type == aql::NODE_TYPE_OPERATOR_BINARY_GE) {
-      // a.b >= value
-      if (value != lowest) {
-        value.back() -= 0x01U;  // modify lower bound so it is included
-      }
-      return new RocksDBPrimaryIndexRangeIterator(
-          &_collection /*logical collection*/, trx, this, opts.ascending /*reverse*/,
-          RocksDBKeyBounds::PrimaryIndex(_objectId, value, hightest));
-    }
-
-    // operator type unsupported or IN used on non-array
-    LOG_DEVEL << "EmptyIndexIterator" << comp->getTypeString();
-    return new EmptyIndexIterator(&_collection, trx);
-  } else {
-    TRI_ASSERT(node->numMembers() == 2);
-    LOG_DEVEL << "EmptyIndexIterator - complex" << arangodb::aql::AstNode::toString(node);
-    // d._key < "bar" && d._key > bar -- find uppper and lower bounds
-
-    // USE THIS TO COMBINE WITH THE ABOVE CODE -- std::array<aql::AstNode*, 2> nodes = {node->getMember(0), nullptr};
-    std::array<aql::AstNode*, 2> nodes = {node->getMember(0), node->getMember(1)};
-    for (auto n : nodes) {
-      if (n == nullptr) {
-        continue;
-      }
-      auto comp = n->getMember(0);
-      auto attrNode = comp->getMember(0);
-      auto valNode = comp->getMember(1);
-    }
-
-    // more complex condition
-    return new EmptyIndexIterator(&_collection, trx);
   }
+
+
+  std::unique_ptr<std::string> lower = nullptr;
+  std::unique_ptr<std::string> upper = nullptr;
+
+  // add nodes that may create an range
+  std::vector<aql::AstNode const*> nodes;
+  for (size_t i = 0; i < node->numMembers(); i++) {
+    nodes.push_back(node->getMember(i));
+  }
+
+  for (auto n : nodes) {
+    if (n == nullptr) {
+      continue;
+    }
+
+    auto comp = n->getMember(0);
+    auto type = comp->type;
+
+    if (!(type == aql::NODE_TYPE_OPERATOR_BINARY_LE ||
+          type == aql::NODE_TYPE_OPERATOR_BINARY_LT || type == aql::NODE_TYPE_OPERATOR_BINARY_GE ||
+          type == aql::NODE_TYPE_OPERATOR_BINARY_GT)) {
+      // We should throw to show that the condition is broken
+      n->dump(20);
+      return new EmptyIndexIterator(&_collection, trx);
+    }
+
+    auto attrNode = comp->getMember(0);
+    auto valNode = comp->getMember(1);
+    bool flip = false;
+
+    if (attrNode->type != aql::NODE_TYPE_ATTRIBUTE_ACCESS) {
+      // value == a.b  ->  flip the two sides
+      // REVIEW - taken from VPackIndex -> impact on comp?! this is not
+      attrNode = comp->getMember(1);
+      valNode = comp->getMember(0);
+      flip = true;
+    }
+
+    TRI_ASSERT(attrNode->type == aql::NODE_TYPE_ATTRIBUTE_ACCESS);
+    bool const isId = (attrNode->stringEquals(StaticStrings::IdString));
+    TRI_ASSERT(valNode->type == aql::AstNodeType::NODE_TYPE_VALUE);
+
+    if (valNode->isStringValue()) {
+
+      if (flip) {
+        switch (type) {
+          case aql::NODE_TYPE_OPERATOR_BINARY_LE: {
+            type = aql::NODE_TYPE_OPERATOR_BINARY_GE;
+            break;
+          }
+          case aql::NODE_TYPE_OPERATOR_BINARY_LT: {
+            type = aql::NODE_TYPE_OPERATOR_BINARY_GT;
+            break;
+          }
+          case aql::NODE_TYPE_OPERATOR_BINARY_GE: {
+            type = aql::NODE_TYPE_OPERATOR_BINARY_LE;
+            break;
+          }
+          case aql::NODE_TYPE_OPERATOR_BINARY_GT: {
+            type = aql::NODE_TYPE_OPERATOR_BINARY_LT;
+            break;
+          }
+          default: {
+            LOG_DEVEL << "cound not specialize condition";
+            LOG_DEVEL << "EmptyIndexIterator - complex" << arangodb::aql::AstNode::toString(node);
+            return new EmptyIndexIterator(&_collection, trx);
+          }
+        }
+      }
+
+      auto value = valNode->getString();
+      removeCollectionFromString(isId, value);
+
+      if (type == aql::NODE_TYPE_OPERATOR_BINARY_LE || type == aql::NODE_TYPE_OPERATOR_BINARY_LT) {
+        // a.b < value
+        if (type == aql::NODE_TYPE_OPERATOR_BINARY_LT && value != lowest) {
+          value.back() -= 0x01U;  // modify upper bound so that it is not included
+        }
+        if (!upper || value < *upper) {
+          upper = std::make_unique<std::string>(std::move(value));
+        }
+      }
+
+      if (type == aql::NODE_TYPE_OPERATOR_BINARY_GE ||
+          type == aql::NODE_TYPE_OPERATOR_BINARY_GT) {
+        // a.b >= value
+        if (type == aql::NODE_TYPE_OPERATOR_BINARY_GE && value != lowest) {
+          value.back() -= 0x01U;  // modify lower bound so it is included
+        }
+        lower = std::make_unique<std::string>(std::move(value));
+      }
+    }
+
+    if (upper && !lower) {
+      lower = std::make_unique<std::string>(lowest);
+    } else if (lower && !upper) {
+      upper = std::make_unique<std::string>(hightest);
+    }
+
+    if (lower && upper) {
+      return new RocksDBPrimaryIndexRangeIterator(
+          &_collection /*logical collection*/, trx, this, opts.ascending /*reverse*/,
+          RocksDBKeyBounds::PrimaryIndex(_objectId, *lower, *upper));
+    } else {
+      // LOG_TOPIC(Logger::AQL, WARN)
+      LOG_DEVEL << "could not create range iterator - returning empty";
+    }
+  }  // for nodes
+
+  // operator type unsupported or IN used on non-array
+  LOG_DEVEL << "EmptyIndexIterator - complex" << arangodb::aql::AstNode::toString(node);
+  return new EmptyIndexIterator(&_collection, trx);
 };
 
 /// @brief specializes the condition for use with the index
