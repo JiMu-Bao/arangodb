@@ -239,10 +239,9 @@ RocksDBKeyBounds::RocksDBKeyBounds(RocksDBEntryType type, uint64_t id,
 
   switch (_type) {
     case RocksDBEntryType::PrimaryIndexValue: {
-      // format: id lower | id upper
-      //         start      end
 
-      //_internals.reserve(2 * (sizeof(uint64_t) + lower.size() + 2) + 1);
+      // format: id lower id upper
+      //         start    end
       _internals.reserve(sizeof(id) + (lower.size() + sizeof(_stringSeparator)) +
                          sizeof(id) + (upper.size() + sizeof(_stringSeparator)));
 
@@ -251,7 +250,8 @@ RocksDBKeyBounds::RocksDBKeyBounds(RocksDBEntryType type, uint64_t id,
       _internals.buffer().append(lower.data(), lower.length());
       _internals.push_back(_stringSeparator);
 
-      _internals.separate();  // set separator
+      // set separator
+      _internals.separate();
 
       // id - upper
       uint64ToPersistent(_internals.buffer(), id);
