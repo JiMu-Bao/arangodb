@@ -605,19 +605,19 @@ IndexIterator* RocksDBPrimaryIndex::iteratorForCondition(
     nodes.push_back(node->getMember(i));
   }
 
-  for (auto n : nodes) {
-    if (n == nullptr) {
+  for (auto comp : nodes) {
+    if (comp == nullptr) {
       continue;
     }
 
-    auto comp = n->getMember(0);
     auto type = comp->type;
 
     if (!(type == aql::NODE_TYPE_OPERATOR_BINARY_LE ||
           type == aql::NODE_TYPE_OPERATOR_BINARY_LT || type == aql::NODE_TYPE_OPERATOR_BINARY_GE ||
           type == aql::NODE_TYPE_OPERATOR_BINARY_GT)) {
       // We should throw to show that the condition is broken
-      n->dump(20);
+      LOG_DEVEL << "compare not in in < > <= =>";
+      comp->dump(20);
       return new EmptyIndexIterator(&_collection, trx);
     }
 
@@ -639,6 +639,7 @@ IndexIterator* RocksDBPrimaryIndex::iteratorForCondition(
 
     if (valNode->isStringValue()) {
       if (flip) {
+        LOG_DEVEL << "flipping";
         switch (type) {
           case aql::NODE_TYPE_OPERATOR_BINARY_LE: {
             type = aql::NODE_TYPE_OPERATOR_BINARY_GE;
@@ -671,39 +672,42 @@ IndexIterator* RocksDBPrimaryIndex::iteratorForCondition(
       if (type == aql::NODE_TYPE_OPERATOR_BINARY_LE || type == aql::NODE_TYPE_OPERATOR_BINARY_LT) {
         // a.b < value
         if (type == aql::NODE_TYPE_OPERATOR_BINARY_LT && value != lowest) {
+          LOG_DEVEL << "upper pre modification" << value;
           value.back() -= 0x01U;  // modify upper bound so that it is not included
         }
         if (!upper || value < *upper) {
           upper = std::make_unique<std::string>(std::move(value));
+          LOG_DEVEL << "upper" << *upper;
         }
       }
 
       if (type == aql::NODE_TYPE_OPERATOR_BINARY_GE || type == aql::NODE_TYPE_OPERATOR_BINARY_GT) {
         // a.b >= value
         if (type == aql::NODE_TYPE_OPERATOR_BINARY_GE && value != lowest) {
+          LOG_DEVEL << "lower pre modification" << value;
           value.back() -= 0x01U;  // modify lower bound so it is included
         }
         lower = std::make_unique<std::string>(std::move(value));
+        LOG_DEVEL << "lower:" << *lower;
       }
     }
 
-    if (upper && !lower) {
-      lower = std::make_unique<std::string>(lowest);
-    } else if (lower && !upper) {
-      upper = std::make_unique<std::string>(hightest);
-    }
-
-    if (lower && upper) {
-      return new RocksDBPrimaryIndexRangeIterator(
-          &_collection /*logical collection*/, trx, this, opts.ascending /*reverse*/,
-          RocksDBKeyBounds::PrimaryIndex(_objectId, *lower, *upper));
-    } else {
-      // LOG_TOPIC(Logger::AQL, WARN)
-      LOG_DEVEL << "could not create range iterator - returning empty";
-    }
   }  // for nodes
 
+  if (upper && !lower) {
+    lower = std::make_unique<std::string>(lowest);
+  } else if (lower && !upper) {
+    upper = std::make_unique<std::string>(hightest);
+  }
+
+  if (lower && upper) {
+    return new RocksDBPrimaryIndexRangeIterator(
+        &_collection /*logical collection*/, trx, this, opts.ascending /*reverse*/,
+        RocksDBKeyBounds::PrimaryIndex(_objectId, *lower, *upper));
+  }
+
   // operator type unsupported or IN used on non-array
+  LOG_DEVEL << "could not create range iterator - returning empty";
   LOG_DEVEL << "EmptyIndexIterator - complex" << arangodb::aql::AstNode::toString(node);
   return new EmptyIndexIterator(&_collection, trx);
 };
