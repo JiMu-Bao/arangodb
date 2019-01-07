@@ -105,6 +105,12 @@ function optimizerIndexesRangesTestSuite () {
     testPrimaryRanges : function () {
       var queries = [
         [
+          "FOR i IN " + c.name() + " FILTER (i._key >= 'test1990' && i._id <= '" + c.name() + "/test2') RETURN i._key",
+          [ "test1999", "test1998", "test1997", "test1996", "test1995", "test1994", "test1993", "test1992", "test1991", "test1990" ]
+        ],[
+          "FOR i IN " + c.name() + " FILTER (i._key >= 'test1990' && i._id <= '" + c.name() + "/test2') RETURN i._key",
+          [ "test1999", "test1998", "test1997", "test1996", "test1995", "test1994", "test1993", "test1992", "test1991", "test1990" ]
+        ],[
           "FOR i IN " + c.name() + " FILTER (i._key >= 'test1990' && i._key <= 'test2') RETURN i._key",
           [ "test1999", "test1998", "test1997", "test1996", "test1995", "test1994", "test1993", "test1992", "test1991", "test1990" ]
         ],[
