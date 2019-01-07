@@ -116,6 +116,24 @@ function optimizerIndexesRangesTestSuite () {
         ],[
           "FOR i IN " + c.name() + " FILTER ('test0002' > i._key) RETURN i._key",
           [ "test0000", "test0001" ]
+        ],[
+          "FOR i IN " + c.name() + " FILTER (i._key > 'test1997') RETURN i._key",
+          [ "test1998", "test1999" ]
+        ],[
+          "FOR i IN " + c.name() + " FILTER ('test1997' < i._key) RETURN i._key",
+          [ "test1998", "test1999" ]
+        ],[
+          "FOR i IN " + c.name() + " FILTER (i._key <= 'test0002') RETURN i._key",
+          [ "test0000", "test0001", "test0002" ]
+        ],[
+          "FOR i IN " + c.name() + " FILTER ('test0002' >= i._key) RETURN i._key",
+          [ "test0000", "test0001", "test0002" ]
+        ],[
+          "FOR i IN " + c.name() + " FILTER (i._key >= 'test1997') RETURN i._key",
+          [ "test1997", "test1998", "test1999" ]
+        ],[
+          "FOR i IN " + c.name() + " FILTER ('test1997' <= i._key) RETURN i._key",
+          [ "test1997", "test1998", "test1999" ]
         ]
       ];
 
