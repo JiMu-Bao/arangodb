@@ -103,20 +103,28 @@ function optimizerIndexesRangesTestSuite () {
 
 
     testPrimaryRanges : function () {
-      var queries = [
+      var queries = [ // queries[0] - query -- queries[1] - expected result
+        // _key and _id mixed
         [
           "FOR i IN " + c.name() + " FILTER (i._key >= 'test1990' && i._id <= '" + c.name() + "/test2') RETURN i._key",
           [ "test1999", "test1998", "test1997", "test1996", "test1995", "test1994", "test1993", "test1992", "test1991", "test1990" ]
         ],[
           "FOR i IN " + c.name() + " FILTER (i._key >= 'test1990' && i._id <= '" + c.name() + "/test2') RETURN i._key",
           [ "test1999", "test1998", "test1997", "test1996", "test1995", "test1994", "test1993", "test1992", "test1991", "test1990" ]
-        ],[
+        ],
+
+        // more than one condition
+        [
           "FOR i IN " + c.name() + " FILTER (i._key >= 'test1990' && i._key <= 'test2') RETURN i._key",
           [ "test1999", "test1998", "test1997", "test1996", "test1995", "test1994", "test1993", "test1992", "test1991", "test1990" ]
         ],[
           "FOR i IN " + c.name() + " FILTER (i._key >= 'test1990' && i._key <= 'test2') RETURN i._key",
           [ "test1999", "test1998", "test1997", "test1996", "test1995", "test1994", "test1993", "test1992", "test1991", "test1990" ]
-        ],[
+
+        ],
+
+        // tests for _key
+        [
           "FOR i IN " + c.name() + " FILTER (i._key < 'test0002') RETURN i._key",
           [ "test0000", "test0001" ]
         ],[
@@ -140,8 +148,10 @@ function optimizerIndexesRangesTestSuite () {
         ],[
           "FOR i IN " + c.name() + " FILTER ('test1997' <= i._key) RETURN i._key",
           [ "test1997", "test1998", "test1999" ]
-        ],[
+        ],
 
+        // tests for _id
+        [
           "FOR i IN " + c.name() + " FILTER (i._id < '" + c.name() + "/test0002') RETURN i._key",
           [ "test0000", "test0001" ]
         ],[
@@ -165,8 +175,15 @@ function optimizerIndexesRangesTestSuite () {
         ],[
           "FOR i IN " + c.name() + " FILTER ('" + c.name() + "/test1997' <= i._id) RETURN i._key",
           [ "test1997", "test1998", "test1999" ]
+        ],
+
+        //// edge cases
+        [
+        // one element in range
+          "FOR i IN " + c.name() + " FILTER ('test1997' <= i._key && 'test1997' >= i._key) RETURN i._key",
+          [ "test1997" ]
         ]
-      ];
+      ]; //end of array
 
       queries.forEach(function(query) {
         var plan = AQL_EXPLAIN(query[0]).plan;
@@ -174,6 +191,7 @@ function optimizerIndexesRangesTestSuite () {
           return node.type;
         });
 
+        db._explain(query[0]);
         // ensure an index is used
         assertNotEqual(-1, nodeTypes.indexOf("IndexNode"), query);
 
@@ -189,6 +207,46 @@ function optimizerIndexesRangesTestSuite () {
         });
 
         assertTrue(results.stats.scannedIndex > 0);
+        assertEqual(0, results.stats.scannedFull);
+      });
+    },
+
+
+
+    testPrimaryRangesEdgeCases : function () {
+      var queries = [ // queries[0] - query -- queries[1] - expected result
+        [
+          // upper is greater than lower
+          "FOR i IN " + c.name() + " FILTER (i._key <= 'test1997' && i._key >= 'test1998') RETURN i._key",
+          [ ]
+        ],[
+          "FOR i IN " + c.name() + " FILTER (i._key == 'test1997' && i._key >= 'test1997') RETURN i._key",
+          [ 'test1997' ]
+        ],[
+          "FOR i IN " + c.name() + " FILTER (i._key == 'test1997' && i._key == 'test1998') RETURN i._key",
+          [  ]
+        ]
+      ]; //end of array
+
+      queries.forEach(function(query) {
+        var plan = AQL_EXPLAIN(query[0]).plan;
+        var nodeTypes = plan.nodes.map(function(node) {
+          return node.type;
+        });
+
+        db._explain(query[0]);
+
+        var results = AQL_EXECUTE(query[0]);
+        //print("#########################################################");
+        //print(results);
+        //print("#########################################################");
+
+        assertEqual(query[1].length , results.json.length, query);
+        var last = query[1][0];
+        results.json.forEach(function(value) {
+          assertNotEqual(-1, query[1].indexOf(value));
+        });
+
         assertEqual(0, results.stats.scannedFull);
       });
     },
