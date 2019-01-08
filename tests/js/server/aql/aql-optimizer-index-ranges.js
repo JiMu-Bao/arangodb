@@ -191,7 +191,7 @@ function optimizerIndexesRangesTestSuite () {
           return node.type;
         });
 
-        db._explain(query[0]);
+        //db._explain(query[0]);
         // ensure an index is used
         assertNotEqual(-1, nodeTypes.indexOf("IndexNode"), query);
 
@@ -225,6 +225,9 @@ function optimizerIndexesRangesTestSuite () {
         ],[
           "FOR i IN " + c.name() + " FILTER (i._key == 'test1997' && i._key == 'test1998') RETURN i._key",
           [  ]
+        ],[
+          "FOR i IN " + c.name() + " FILTER (i._key < true) RETURN i._key",
+          [  ]
         ]
       ]; //end of array
 
@@ -234,7 +237,7 @@ function optimizerIndexesRangesTestSuite () {
           return node.type;
         });
 
-        db._explain(query[0]);
+        //db._explain(query[0]);
 
         var results = AQL_EXECUTE(query[0]);
         //print("#########################################################");

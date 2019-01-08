@@ -163,7 +163,7 @@ bool SkiplistIndexAttributeMatcher::accessFitsIndex(
         THROW_ARANGO_EXCEPTION(TRI_ERROR_DEBUG);
       }
 
-      LOG_DEVEL << "match !! " << idx->fields()[i];
+      // LOG_DEVEL << "match !! " << idx->fields()[i];
       // LOG_DEVEL << "    <---";
       return true;
     }
@@ -509,9 +509,9 @@ arangodb::aql::AstNode* SkiplistIndexAttributeMatcher::specializeCondition(
     node->addMember(it);
   }
 
-  LOG_DEVEL_IF(node) << "specializeCondition result node: "
-                     << arangodb::aql::AstNode::toString(node);
-  LOG_DEVEL_IF(!node) << "specializeCondition result node: is nullptr";
+  //LOG_DEVEL_IF(node) << "specializeCondition result node: "
+  //                   << arangodb::aql::AstNode::toString(node);
+  //LOG_DEVEL_IF(!node) << "specializeCondition result node: is nullptr";
 
   return node;
 }
