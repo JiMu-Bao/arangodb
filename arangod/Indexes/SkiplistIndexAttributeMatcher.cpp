@@ -46,15 +46,9 @@ bool SkiplistIndexAttributeMatcher::accessFitsIndex(
     std::unordered_set<std::string>& nonNullAttributes,  // set of stringified op-childeren (access other) that may not be null
     bool isExecution  // skip usage check in execution phase
 ) {
-  // LOG_DEVEL << "--->";
   if (!idx->canUseConditionPart(access, other, op, reference, nonNullAttributes, isExecution)) {
-    // LOG_DEVEL << "index can not use condition part";
-    // LOG_DEVEL << "    <---";
     return false;
   }
-
-  // LOG_DEVEL << "access: " << aql::AstNode::toString(access);
-  // LOG_DEVEL << "other: " << aql::AstNode::toString(other);
 
   arangodb::aql::AstNode const* what = access;
   std::pair<arangodb::aql::Variable const*, std::vector<arangodb::basics::AttributeName>> attributeData;
@@ -62,20 +56,14 @@ bool SkiplistIndexAttributeMatcher::accessFitsIndex(
   if (op->type != arangodb::aql::NODE_TYPE_OPERATOR_BINARY_IN) {
     if (!what->isAttributeAccessForVariable(attributeData) || attributeData.first != reference) {
       // this access is not referencing this collection
-      // LOG_DEVEL << "exit 1";
-      // LOG_DEVEL << "    <---";
       return false;
     }
     if (arangodb::basics::TRI_AttributeNamesHaveExpansion(attributeData.second)) {
       // doc.value[*] == 'value'
-      // LOG_DEVEL << "exit 2";
-      // LOG_DEVEL << "    <---";
       return false;
     }
     if (idx->isAttributeExpanded(attributeData.second)) {
       // doc.value == 'value' (with an array index)
-      // LOG_DEVEL << "exit 3";
-      // LOG_DEVEL << "    <---";
       return false;
     }
   } else {
@@ -95,8 +83,6 @@ bool SkiplistIndexAttributeMatcher::accessFitsIndex(
       // check for  'value' IN doc.value  AND  'value' IN doc.value[*]
       what = other;  // if what should be used later
     } else {
-      // LOG_DEVEL << "exit 4";
-      // LOG_DEVEL << "    <---";
       return false;
     }
   }
@@ -106,13 +92,11 @@ bool SkiplistIndexAttributeMatcher::accessFitsIndex(
   for (size_t i = 0; i < idx->fields().size(); ++i) {
     if (idx->fields()[i].size() != fieldNames.size()) {
       // attribute path length differs
-      // LOG_DEVEL << "exit at attriubte path length check";
       continue;
     }
 
     if (idx->isAttributeExpanded(i) && op->type != arangodb::aql::NODE_TYPE_OPERATOR_BINARY_IN) {
       // If this attribute is correct or not, it could only serve for IN
-      // LOG_DEVEL << "exit at expanded check";
       continue;
     }
 
@@ -123,30 +107,7 @@ bool SkiplistIndexAttributeMatcher::accessFitsIndex(
     // but can go directly for "_id"
     if (!match && isPrimaryIndex) {
       if (i == 0 && fieldNames[i].name == StaticStrings::IdString) {
-        // LOG_DEVEL << "accept _id";
         match = true;
-        //} else if (i == 0 && (fieldNames[i].name == StaticStrings::FromString ||
-        //                      fieldNames[i].name == StaticStrings::ToString)) {
-        //  LOG_DEVEL << "accept _from/_to";
-        //  match = true;
-        //} else {
-        //  // Debug
-        //  std::stringstream ss;
-        //  std::size_t i = 0;
-
-        //  for (auto const& vec : idx->fields()) {
-        //    ss << "idx fields " << i << ":";
-        //    for (auto const& item : vec) {
-        //      ss << " " << item.name;
-        //    }
-        //  }
-
-        //  ss << "  fieldnames:";
-        //  for (auto const& i : fieldNames) {
-        //    ss << " " << i.name;
-        //  }
-
-        //  LOG_DEVEL << ss.rdbuf();
       }
     };
 
@@ -163,14 +124,10 @@ bool SkiplistIndexAttributeMatcher::accessFitsIndex(
         THROW_ARANGO_EXCEPTION(TRI_ERROR_DEBUG);
       }
 
-      // LOG_DEVEL << "match !! " << idx->fields()[i];
-      // LOG_DEVEL << "    <---";
       return true;
     }
   }
 
-  // LOG_DEVEL << "no match :(";
-  // LOG_DEVEL << "    <---";
   return false;
 }
 
@@ -508,10 +465,6 @@ arangodb::aql::AstNode* SkiplistIndexAttributeMatcher::specializeCondition(
     TRI_ASSERT(it->type != arangodb::aql::NODE_TYPE_OPERATOR_BINARY_NE);
     node->addMember(it);
   }
-
-  //LOG_DEVEL_IF(node) << "specializeCondition result node: "
-  //                   << arangodb::aql::AstNode::toString(node);
-  //LOG_DEVEL_IF(!node) << "specializeCondition result node: is nullptr";
 
   return node;
 }

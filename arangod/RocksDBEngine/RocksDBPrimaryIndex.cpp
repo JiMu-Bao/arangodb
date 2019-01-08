@@ -63,6 +63,11 @@
 
 using namespace arangodb;
 
+namespace {
+  std::string const lowest;               // smallest possible key
+  std::string const highest = "\xFF";    // greatest possible key
+}
+
 RocksDBPrimaryIndexRangeIterator::RocksDBPrimaryIndexRangeIterator(
     LogicalCollection* collection, transaction::Methods* trx,
     arangodb::RocksDBPrimaryIndex const* index, bool reverse, RocksDBKeyBounds&& bounds)
@@ -523,24 +528,11 @@ bool RocksDBPrimaryIndex::supportsFilterCondition(
   std::unordered_map<size_t, std::vector<arangodb::aql::AstNode const*>> found;
   std::unordered_set<std::string> nonNullAttributes;
 
-  std::size_t values = 0;  // TODO - delete if setting estimatedItems is ok
-
+  std::size_t values = 0;
   SkiplistIndexAttributeMatcher::matchAttributes(this, node, reference, found,
                                                  values, nonNullAttributes,
                                                  /*skip evaluation (during execution)*/ false);
-
-  // for (auto const& int_ast_vec_pair : found) {
-  //  std::stringstream ss;
-  //  ss << "-==- " << int_ast_vec_pair.first;
-  //  for (auto const& node : int_ast_vec_pair.second) {
-  //    ss << " <<==>> " << arangodb::aql::AstNode::toString(node);
-  //  }
-  // LOG_DEVEL << ss.rdbuf();
-  //}
-
-  estimatedItems = values;  // TODO - check if this ok -- if no reviewer can tell from memory
-
-  // LOG_DEVEL << "supportsFilterCondition (result): " << std::boolalpha << !found.empty();
+  estimatedItems = values;
   return !found.empty();
 }
 
@@ -551,13 +543,6 @@ IndexIterator* RocksDBPrimaryIndex::iteratorForCondition(
   TRI_ASSERT(!isSorted() || opts.sorted);
   TRI_ASSERT(node->type == aql::NODE_TYPE_OPERATOR_NARY_AND);
   TRI_ASSERT(node->numMembers() >= 1);
-  TRI_ASSERT(node->numMembers() <= 2);
-
-  // LOG_DEVEL << "iteratorForCondition";
-  // LOG_DEVEL << arangodb::aql::AstNode::toString(node);
-
-  static std::string const& lowest(StaticStrings::Empty);
-  static std::string const hightest = "\xFF";
 
   static const auto removeCollectionFromString =
       [this, &trx](bool isId, std::string& value) -> bool {
@@ -621,10 +606,12 @@ IndexIterator* RocksDBPrimaryIndex::iteratorForCondition(
     }
   }
 
-  std::unique_ptr<std::string> lower = nullptr;
-  std::unique_ptr<std::string> upper = nullptr;
+  std::string lower;
+  std::string upper;
+  bool lower_found = false;
+  bool upper_found = false;
 
-  // add nodes that may create an range
+  // add nodes that may create a range
   std::vector<aql::AstNode const*> nodes;
   for (size_t i = 0; i < node->numMembers(); i++) {
     nodes.push_back(node->getMember(i));
@@ -642,9 +629,6 @@ IndexIterator* RocksDBPrimaryIndex::iteratorForCondition(
           type == aql::NODE_TYPE_OPERATOR_BINARY_GT ||
           type == aql::NODE_TYPE_OPERATOR_BINARY_EQ
         )) {
-      // We should throw to show that the condition is broken
-      // LOG_DEVEL << "compare not in in < > <= =>";
-      //comp->dump(20);
       return new EmptyIndexIterator(&_collection, trx);
     }
 
@@ -654,7 +638,6 @@ IndexIterator* RocksDBPrimaryIndex::iteratorForCondition(
 
     if (attrNode->type != aql::NODE_TYPE_ATTRIBUTE_ACCESS) {
       // value == a.b  ->  flip the two sides
-      // REVIEW - taken from VPackIndex -> impact on comp?! this is not
       attrNode = comp->getMember(1);
       valNode = comp->getMember(0);
       flip = true;
@@ -667,7 +650,7 @@ IndexIterator* RocksDBPrimaryIndex::iteratorForCondition(
     if (valNode->isStringValue()) {
       value = valNode->getString();
     } else if (valNode->isObject() || valNode->isArray()) {
-      value = hightest;
+      value = highest;
     } else if (valNode->isNullValue() || valNode->isBoolValue()) {
       // keep lowest
     } else {
@@ -675,7 +658,6 @@ IndexIterator* RocksDBPrimaryIndex::iteratorForCondition(
     }
 
     if (flip) {
-      // LOG_DEVEL << "flipping";
       switch (type) {
         case aql::NODE_TYPE_OPERATOR_BINARY_LE: {
           type = aql::NODE_TYPE_OPERATOR_BINARY_GE;
@@ -698,69 +680,62 @@ IndexIterator* RocksDBPrimaryIndex::iteratorForCondition(
         }
         default: {
           continue;
-          // LOG_DEVEL << "cound not specialize condition";
-          // LOG_DEVEL << "EmptyIndexIterator - complex"
-          //          << arangodb::aql::AstNode::toString(node);
-          // return new EmptyIndexIterator(&_collection, trx);
         }
       }
     }
 
     if (!removeCollectionFromString(isId, value)) {
-      // _id is not valid for this collection skipping - THROW ERROR?
       continue;
     }
 
     if (type == aql::NODE_TYPE_OPERATOR_BINARY_EQ) {
-      // a.b < value
-      if (!upper || value < *upper) {
-        upper = std::make_unique<std::string>(value);
+      if (!upper_found || value < upper) {
+        upper = value;
+        upper_found = true;
       }
-      if (!lower || value < *lower) {
-        upper = std::make_unique<std::string>(std::move(value));
+      if (!lower_found || value < lower) {
+        lower = std::move(value);
+        lower_found = true;
       }
     }
 
     if (type == aql::NODE_TYPE_OPERATOR_BINARY_LE || type == aql::NODE_TYPE_OPERATOR_BINARY_LT) {
       // a.b < value
       if (type == aql::NODE_TYPE_OPERATOR_BINARY_LT && value != lowest) {
-        // LOG_DEVEL << "upper pre modification" << value;
         value.back() -= 0x01U;  // modify upper bound so that it is not included
       }
-      if (!upper || value < *upper) {
-        upper = std::make_unique<std::string>(std::move(value));
-        // LOG_DEVEL << "upper" << *upper;
+      if (!upper_found || value < upper) {
+        upper = std::move(value);
+        upper_found = true;
       }
     }
 
     if (type == aql::NODE_TYPE_OPERATOR_BINARY_GE || type == aql::NODE_TYPE_OPERATOR_BINARY_GT) {
-      // a.b >= value
       if (type == aql::NODE_TYPE_OPERATOR_BINARY_GE && value != lowest) {
-        // LOG_DEVEL << "lower pre modification" << value;
         value.back() -= 0x01U;  // modify lower bound so it is included
       }
-      lower = std::make_unique<std::string>(std::move(value));
-      // LOG_DEVEL << "lower:" << *lower;
+      lower = std::move(value);
+      lower_found = true;
     }
 
   }  // for nodes
 
   // if only one bound is given select the other (lowest or highest) accordingly
-  if (upper && !lower) {
-    lower = std::make_unique<std::string>(lowest);
-  } else if (lower && !upper) {
-    upper = std::make_unique<std::string>(hightest);
+  if (upper_found && !lower_found) {
+    lower = lowest;
+    lower_found = true;
+  } else if (lower_found && !upper_found) {
+    upper = highest;
+    upper_found = true;
   }
 
-  if (lower && upper) {
+  if (lower_found && upper_found) {
     return new RocksDBPrimaryIndexRangeIterator(
         &_collection /*logical collection*/, trx, this, opts.ascending /*reverse*/,
-        RocksDBKeyBounds::PrimaryIndex(_objectId, *lower, *upper));
+        RocksDBKeyBounds::PrimaryIndex(_objectId, lower, upper));
   }
 
   // operator type unsupported or IN used on non-array
-  // LOG_DEVEL << "could not create range iterator - returning empty";
-  // LOG_DEVEL << "EmptyIndexIterator - complex" << arangodb::aql::AstNode::toString(node);
   return new EmptyIndexIterator(&_collection, trx);
 };
 
