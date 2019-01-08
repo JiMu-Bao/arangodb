@@ -31,9 +31,6 @@
 #include <velocypack/Slice.h>
 
 #include <iosfwd>
-#ifdef ARANGODB_ENABLE_MAINTAINER_MODE
-#include <iostream>
-#endif
 
 namespace arangodb {
 namespace velocypack {
@@ -266,7 +263,7 @@ struct AstNode {
 /// @brief dump the node (for debugging purposes)
 #ifdef ARANGODB_ENABLE_MAINTAINER_MODE
   std::ostream& toStream(std::ostream& os, int indent) const;
-  void dump(int indent) const { toStream(std::cout, indent); }
+  void dump(int indent) const;
 #endif
 
   /// @brief compute the value for a constant value node

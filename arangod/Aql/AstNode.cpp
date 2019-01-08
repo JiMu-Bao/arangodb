@@ -839,6 +839,8 @@ std::ostream& AstNode::toStream(std::ostream& os, int level) const {
   }
   return os;
 }
+
+void AstNode::dump(int indent) const { toStream(std::cout, indent); }
 #endif
 
 /// @brief compute the value for a constant value node

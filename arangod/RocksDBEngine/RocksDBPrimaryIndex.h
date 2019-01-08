@@ -115,7 +115,7 @@ class RocksDBPrimaryIndexRangeIterator final : public IndexIterator {
   ~RocksDBPrimaryIndexRangeIterator() = default;
 
  public:
-  char const* typeName() const override { return "rocksdb-index-iterator"; }
+  char const* typeName() const override { return "rocksdb-range-index-iterator"; }
 
   /// @brief Get the next limit many elements in the index
   bool next(LocalDocumentIdCallback const& cb, size_t limit) override;
