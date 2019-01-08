@@ -559,13 +559,38 @@ IndexIterator* RocksDBPrimaryIndex::iteratorForCondition(
   static std::string const& lowest(StaticStrings::Empty);
   static std::string const hightest = "\xFF";
 
-  static const auto removeCollectionFromString = [](bool isId, std::string& value) -> void {
+  static const auto removeCollectionFromString =
+      [this, &trx](bool isId, std::string& value) -> bool {
     if (isId) {
-      auto found = value.find('/');
-      if (found != std::string::npos && found < value.size()) {
-        value = std::string(value.data() + found + 1, value.size() - found - 1);
+      char const* key = nullptr;
+      size_t outLength = 0;
+      std::shared_ptr<LogicalCollection> collection;
+      Result res = trx->resolveId(value.data(), value.length(), collection, key, outLength);
+
+      if (!res.ok()) {
+        return false;
       }
+
+      TRI_ASSERT(key);
+      TRI_ASSERT(collection);
+
+      if (!_isRunningInCluster && collection->id() != _collection.id()) {
+        // only continue lookup if the id value is syntactically correct and
+        // refers to "our" collection, using local collection id
+        return false;
+      }
+
+      if (_isRunningInCluster) {
+        if (collection->planId() != _collection.planId()) {
+          // only continue lookup if the id value is syntactically correct and
+          // refers to "our" collection, using cluster collection id
+          return false;
+        }
+      }
+
+      value = std::string(key, outLength);
     }
+    return true;
   };
 
   if (node->numMembers() == 1) {
@@ -667,7 +692,10 @@ IndexIterator* RocksDBPrimaryIndex::iteratorForCondition(
       }
 
       auto value = valNode->getString();
-      removeCollectionFromString(isId, value);
+      if (!removeCollectionFromString(isId, value)){
+        // _id is not valid for this collection skipping - THROW ERROR?
+        continue;
+      }
 
       if (type == aql::NODE_TYPE_OPERATOR_BINARY_LE || type == aql::NODE_TYPE_OPERATOR_BINARY_LT) {
         // a.b < value
